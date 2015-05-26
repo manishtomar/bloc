@@ -6,40 +6,34 @@ from twisted.internet import task
 from twisted.python import log as default_log
 
 
-# @attributes(['id', 'index'])
-class Session(object):
-    pass
-
-
-def start_partitioning(clock, settle):
-    """
-    Returns deferred that does not fire. Has to be cancelled
-    """
-
-
-def add_participant():
-    pass
-
-
 class EmptyLogger(object):
-    def msg(*a, **k):
+    def msg(self, *a, **k):
         pass
-    def err(*a, **k):
-        pass
+    err = default_log.err
 
 
-class Partitioner(object):
+class NotAllocated(Exception):
     """
-    Partitions a set among participants in memory
+    Raised when getting participent index when group
+    is not allocated
     """
 
-    def __init__(self, clock, settle=15, log=EmptyLogger()):
+
+class GroupParticipants(object):
+    """
+    Manages group of participants. A group is allocated when `settle` time
+    has passed after adding/removing participants. Otherwise it is allocating
+
+    :param IReactorTime clock: A twisted time provider
+    :param float settle: Number of seconds to wait before allocating
+    :param log: Twisted logger
+    """
+    def __init__(self, clock, settle, log=EmptyLogger()):
         self._clock = clock
         self._settle = settle
-        self._participants = set()
+        self._participants = set()  # dict when allocated, set when not
         self._allocated = False
         self._timer = None
-        self._splits = {}
         self.log = log
 
     def _reset_timer(self):
@@ -47,37 +41,55 @@ class Partitioner(object):
             self._timer.cancel()
         self._timer = self._clock.callLater(self._settle, self._settled)
         self._allocated = False
-        self._splits = {}
         self.log.msg('reset timer')
 
     def _settled(self):
-        self._splits = {p: i + 1 for i, p in enumerate(self._participants)}
+        self._participants = {p: i + 1 for i, p in enumerate(self._participants)}
         self._allocated = True
         self.log.msg('settled')
 
     def add_participant(self, participant):
         """
-        Add participant to the partitioner
+        Add participant to the group
         """
-        self._participants.add(participant)
+        if self._allocated:
+            self._participants = set(self._participants.keys()) | {participant}
+        else:
+            self._participants.add(participant)
         self._reset_timer()
 
-    def remove_participant(self, participant):
-        self._participants.remove(participant)
+    def remove_participants(self, participants):
+        """
+        Remove participants from the group
+        """
+        participants = set(participants)
+        if self._allocated:
+            self._participants = set(self._participants.keys()) - participants
+        else:
+            self._participants -= participants
         self._reset_timer()
 
-    def get_participant_index(self, participant):
+    def __getitem__(self, participant):
         """
         Return index of the participant
         """
-        return self._splits[participant]
+        if not self._allocated:
+            raise NotAllocated(participant)
+        return self._participants[participant]
 
     def __len__(self):
-        return len(self._splits)
+        return len(self._participants)
 
     @property
     def allocated(self):
+        """
+        Is it allocated?
+        """
         return self._allocated
+
+    def __str__(self):
+        s = 'allocated' if self._allocated else 'allocating'
+        return 'GroupParticipants: {}, {}'.format(s, str(self._participants))
 
 
 def extract_client(request):
@@ -95,9 +107,10 @@ class Participate(object):
 
     app = Klein()
 
-    def __init__(self, clock, timeout, settle, interval=1, log=EmptyLogger()):
+    def __init__(self, clock, timeout, settle, interval=1, log=EmptyLogger(),
+                 GroupParticipants=GroupParticipants):
         self._clock = clock
-        self._partitioner = Partitioner(self._clock, settle, log)
+        self._group = GroupParticipants(self._clock, settle, log)
         self._timeout = timeout
 
         self._clients = {}
@@ -109,23 +122,26 @@ class Participate(object):
         self.log = log
 
     def _add_client(self, client):
-        self._partitioner.add_participant(client)
+        self._group.add_participant(client)
         self._heartbeat_client(client)
         self.log.msg('Added client', client)
 
-    def _remove_client(self, client):
-        del self._clients[client]
-        self._partitioner.remove_participant(client)
-        self.log.msg('Removed client', client)
+    def _remove_clients(self, clients):
+        for client in clients:
+            del self._clients[client]
+        self._group.remove_participants(clients)
 
     def _check_clients(self):
         now = self._clock.seconds()
         clients_to_remove = []
         for client, last_active in self._clients.iteritems():
-            if now - last_active > self._timeout:
-                self.log.msg('Client {} timed out'.format(client))
+            inactive = now - last_active
+            if inactive > self._timeout:
+                self.log.msg(
+                    'Client {} timed out after {} seconds'.format(client,
+                                                                  inactive))
                 clients_to_remove.append(client)
-        [self._remove_client(c) for c in clients_to_remove]
+        self._remove_clients(clients_to_remove)
 
     def _heartbeat_client(self, client):
         self._clients[client] = self._clock.seconds()
@@ -133,8 +149,9 @@ class Participate(object):
     @app.route('/disconnect', methods=['POST'])
     def cancel_session(self, request):
         client = extract_client(request)
-        if client:
-            self._remove_client(client)
+        if client in self._clients:
+            self._remove_clients([client])
+        return "{}"
 
     @app.route('/index', methods=['GET'])
     def get_index(self, request):
@@ -143,11 +160,11 @@ class Participate(object):
             self._heartbeat_client(client)
         else:
             self._add_client(client)
-        if self._partitioner.allocated:
+        if self._group.allocated:
             return json.dumps(
                 {'status': 'ALLOCATED',
-                 'index': self._partitioner.get_participant_index(client),
-                 'total': len(self._partitioner)})
+                 'index': self._group[client],
+                 'total': len(self._group)})
         else:
             return json.dumps({'status': 'ALLOCATING'})
 
