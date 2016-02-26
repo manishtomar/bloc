@@ -6,11 +6,7 @@ import treq
 from twisted.internet import task
 from twisted.python import log as tlog
 
-
-def check_status(resp, statuses):
-    if resp.code not in statuses:
-        raise ValueError('unexpected resp code: {}'.format(resp.code))
-    return resp
+from utils import check_status, timeout_deferred
 
 
 class ParticipateClient(object):
@@ -18,7 +14,8 @@ class ParticipateClient(object):
     Client to connect to participate server
     """
 
-    def __init__(self, reactor, url, interval, log=tlog, treq=treq, _uuid=uuid):
+    def __init__(self, reactor, url, interval, timeout, log=tlog, treq=treq,
+                 session_id=None):
         self.reactor = reactor
         self.url = url
 
@@ -26,10 +23,14 @@ class ParticipateClient(object):
         self._index = 0
         self._total = 0
         self._interval = interval
+        self._timeout = timeout
 
         self._loop = task.LoopingCall(self._heartbeat)
         self._loop.clock = self.reactor
-        self._session_id = str(_uuid.uuid1())
+        if session_id is None:
+            self._session_id = str(uuid.uuid1())
+        else:
+            self._session_id = session_id
 
         self.log = log
         self.treq = treq
@@ -55,6 +56,7 @@ class ParticipateClient(object):
     def _heartbeat(self):
         d = self.treq.get('{}/index'.format(self.url.rstrip('/')),
                           headers={'X-Session-ID': [self._session_id]})
+        timeout_deferred(d, self._timeout, self.reactor)
         d.addCallback(check_status, [200])
         d.addCallback(treq.json_content)
         d.addCallback(self._set_index)
@@ -83,7 +85,7 @@ def print_index(p):
 
 def test():
     from twisted.internet import reactor
-    p = ParticipateClient(reactor, 'http://localhost:8080', 3, log=tlog)
+    p = ParticipateClient(reactor, 'http://localhost:8989', 3, log=tlog)
     p.start()
     task.LoopingCall(print_index, p).start(5)
     reactor.run()
