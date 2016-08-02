@@ -1,7 +1,4 @@
-Partitioning for distributed systems
-====================================
-
-Simple single-master RESTful partitioner for building distributed systems that want to equally distribute workload among multiple nodes. It is written on top of Twisted. 
+Simple single-master RESTful group membership framework that can be used for building distributed systems that want to equally distribute workload among multiple nodes. It is written on top of Twisted. 
 
 It reliably provides each node with following two pieces of information:
 
