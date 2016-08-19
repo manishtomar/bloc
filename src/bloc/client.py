@@ -4,7 +4,7 @@ import uuid
 import treq
 
 from twisted.internet import task
-from twisted.python import log as tlog
+from twisted.logger import Logger
 
 from utils import check_status, timeout_deferred
 
@@ -14,7 +14,7 @@ class ParticipateClient(object):
     Client to connect to participate server
     """
 
-    def __init__(self, reactor, url, interval, timeout, log=tlog, treq=treq,
+    def __init__(self, reactor, url, interval, timeout, treq=treq,
                  session_id=None):
         self.reactor = reactor
         self.url = url
@@ -32,7 +32,7 @@ class ParticipateClient(object):
         else:
             self._session_id = session_id
 
-        self.log = log
+        self.log = Logger()
         self.treq = treq
 
     def start(self):
@@ -51,7 +51,7 @@ class ParticipateClient(object):
 
     def _error_allocating(self, f):
         self._allocated = False
-        self.log.err(f, 'Error getting index')
+        self.log.error("Error getting index: {f}", f=f)
 
     def _heartbeat(self):
         d = self.treq.get('{}/index'.format(self.url.rstrip('/')),

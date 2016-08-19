@@ -17,11 +17,8 @@ from twisted.web.resource import Resource
 from twisted.web.test.requesthelper import DummyChannel
 from twisted.web.util import DeferredResource
 
-from client import ParticipateClient
-from participate import extract_client
-
-
-MockLogger = mock.Mock(spec=['msg', 'err'])
+from bloc.client import ParticipateClient
+from bloc.server import extract_client
 
 
 class IndexResource(Resource):
@@ -47,9 +44,8 @@ class ParticipateClientTests(SynchronousTestCase):
         self.clock = Clock()
         self.resource = IndexResource(self)
         self.resource.exp_session_id = 'sid'
-        self.log = MockLogger()
         self.client = ParticipateClient(
-            self.clock, 'http://url', 10, 3, log=self.log,
+            self.clock, 'http://url', 10, 3,
             treq=StubTreq(self.resource), session_id='sid')
 
     def test_allocated(self):
@@ -77,7 +73,6 @@ class ParticipateClientTests(SynchronousTestCase):
         self.resource.code = 500
         self.client.start()
         self.assertIsNone(self.client.get_index_total())
-        self.log.err.assert_called_once_with(mock.ANY, "Error getting index")
 
     def test_get_times_out(self):
         """
@@ -92,7 +87,6 @@ class ParticipateClientTests(SynchronousTestCase):
         # no response
         self.clock.advance(3)
         self.assertIsNone(self.client.get_index_total())
-        self.log.err.assert_called_once_with(mock.ANY, "Error getting index")
 
     def test_sequence(self):
         """
