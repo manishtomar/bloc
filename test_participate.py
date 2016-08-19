@@ -92,7 +92,8 @@ class FakeGroup(object):
     def remove_participants(self, ps):
         for p in ps:
             del self.items[p]
-    def __getitem__(self, p):
+    def index_of(self, p):
+        print self.items
         return self.items[p]
     def __len__(self):
         return len(self.items)
@@ -119,7 +120,7 @@ class ParticipateTests(SynchronousTestCase):
         `get_index` returns allocated json with index and total if group
         is allocated
         """
-        self.p._group.allocated = False
+        self.p._group.allocated = True
         self.p._group.items = {'s': 1}
         r = self.p.get_index(request_with_session('s'))
         self.assertEqual(

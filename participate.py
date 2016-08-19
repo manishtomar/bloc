@@ -69,7 +69,7 @@ class GroupParticipants(object):
             self._participants -= participants
         self._reset_timer()
 
-    def __getitem__(self, participant):
+    def index_of(self, participant):
         """
         Return index of the participant
         """
@@ -141,7 +141,8 @@ class Participate(object):
                     'Client {} timed out after {} seconds'.format(client,
                                                                   inactive))
                 clients_to_remove.append(client)
-        self._remove_clients(clients_to_remove)
+        if clients_to_remove:
+            self._remove_clients(clients_to_remove)
 
     def _heartbeat_client(self, client):
         self._clients[client] = self._clock.seconds()
@@ -163,7 +164,7 @@ class Participate(object):
         if self._group.allocated:
             return json.dumps(
                 {'status': 'ALLOCATED',
-                 'index': self._group[client],
+                 'index': self._group.index_of(client),
                  'total': len(self._group)})
         else:
             return json.dumps({'status': 'ALLOCATING'})
