@@ -9,14 +9,14 @@ from twisted.logger import Logger
 from utils import check_status, timeout_deferred
 
 
-class ParticipateClient(object):
+class BlocClient(object):
     """
-    Client to connect to participate server
+    Client to connect to bloc server
     """
 
-    def __init__(self, reactor, url, interval, timeout, treq=treq,
+    def __init__(self, clock, url, interval, timeout, treq=treq,
                  session_id=None):
-        self.reactor = reactor
+        self.clock = clock
         self.url = url
 
         self._allocated = False
@@ -26,7 +26,7 @@ class ParticipateClient(object):
         self._timeout = timeout
 
         self._loop = task.LoopingCall(self._heartbeat)
-        self._loop.clock = self.reactor
+        self._loop.clock = self.clock
         if session_id is None:
             self._session_id = str(uuid.uuid1())
         else:
@@ -56,7 +56,7 @@ class ParticipateClient(object):
     def _heartbeat(self):
         d = self.treq.get('{}/index'.format(self.url.rstrip('/')),
                           headers={'X-Session-ID': [self._session_id]})
-        timeout_deferred(d, self._timeout, self.reactor)
+        timeout_deferred(d, self._timeout, self.clock)
         d.addCallback(check_status, [200])
         d.addCallback(treq.json_content)
         d.addCallback(self._set_index)
@@ -85,7 +85,7 @@ def print_index(p):
 
 def test():
     from twisted.internet import reactor
-    p = ParticipateClient(reactor, 'http://localhost:8989', 3, log=tlog)
+    p = BlocClient(reactor, 'http://localhost:8989', 3)
     p.start()
     task.LoopingCall(print_index, p).start(5)
     reactor.run()

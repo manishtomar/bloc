@@ -17,7 +17,7 @@ from twisted.web.resource import Resource
 from twisted.web.test.requesthelper import DummyChannel
 from twisted.web.util import DeferredResource
 
-from bloc.client import ParticipateClient
+from bloc.client import BlocClient
 from bloc.server import extract_client
 
 
@@ -35,16 +35,16 @@ class IndexResource(Resource):
         return json.dumps(self.resp)
 
 
-class ParticipateClientTests(SynchronousTestCase):
+class BlocClientTests(SynchronousTestCase):
     """
-    Tests for :obj:`client.ParticipateClient`
+    Tests for :obj:`client.BlocClient`
     """
 
     def setUp(self):
         self.clock = Clock()
         self.resource = IndexResource(self)
         self.resource.exp_session_id = 'sid'
-        self.client = ParticipateClient(
+        self.client = BlocClient(
             self.clock, 'http://url', 10, 3,
             treq=StubTreq(self.resource), session_id='sid')
 
