@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import random
 import uuid
 
@@ -80,7 +82,7 @@ class BlocClient(object):
 
 
 def print_index(p):
-    print 'index', p.get_index_total()
+    print('index', p.get_index_total())
 
 
 def test():

@@ -7,7 +7,7 @@ import operator
 
 import mock
 
-from treq.testing import StubTreq
+from treq.testing import RequestSequence, StringStubbingResource, StubTreq, HasHeaders
 
 from twisted.internet.defer import Deferred
 from twisted.internet.task import Clock
@@ -18,21 +18,6 @@ from twisted.web.test.requesthelper import DummyChannel
 from twisted.web.util import DeferredResource
 
 from bloc.client import BlocClient
-from bloc.server import extract_client
-
-
-class IndexResource(Resource):
-    isLeaf = True
-    def __init__(self, test):
-        self.test = test
-        self.resp = None
-        self.code = 200
-        self.exp_session_id = None
-    def render_GET(self, request):
-        self.test.assertEqual(request.path, "/index")
-        self.test.assertEqual(extract_client(request), self.exp_session_id)
-        request.setResponseCode(self.code)
-        return json.dumps(self.resp)
 
 
 class BlocClientTests(SynchronousTestCase):
@@ -42,37 +27,44 @@ class BlocClientTests(SynchronousTestCase):
 
     def setUp(self):
         self.clock = Clock()
-        self.resource = IndexResource(self)
-        self.resource.exp_session_id = 'sid'
-        self.client = BlocClient(
-            self.clock, 'http://url', 10, 3,
-            treq=StubTreq(self.resource), session_id='sid')
+        self.client = BlocClient(self.clock, 'http://url', 10, 3, session_id='sid')
+
+    def setup_treq(self, code=200, body={}):
+        self.stubs = RequestSequence(
+            [(("get", "http://url/index", {}, HasHeaders({"X-Session-ID": ["sid"]}), b''),
+              (code, {}, json.dumps(body)))],
+            self.fail)
+        self.client.treq = StubTreq(StringStubbingResource(self.stubs))
 
     def test_allocated(self):
         """
         When getting index returns ALLOCATED then it is set and is returned
         in `get_index_total`
         """
-        self.resource.resp = {"status": "ALLOCATED", "index": 1, "total": 1}
+        self.setup_treq(body={"status": "ALLOCATED", "index": 1, "total": 1})
         self.client.start()
-        self.assertEqual(self.client.get_index_total(), (1, 1))
+        with self.stubs.consume(self.fail):
+            self.assertEqual(self.client.get_index_total(), (1, 1))
+            self.assertTrue(self.client._allocated)
 
     def test_allocating(self):
         """
         When getting index returns ALLOCATING, then get_index_total returns
         None
         """
-        self.resource.resp = {"status": "ALLOCATING"}
+        self.setup_treq(body={"status": "ALLOCATING"})
         self.client.start()
-        self.assertIsNone(self.client.get_index_total())
+        with self.stubs.consume(self.fail):
+            self.assertIsNone(self.client.get_index_total())
 
     def test_get_errors(self):
         """
         If get index errors, then get_index_total will return None
         """
-        self.resource.code = 500
+        self.setup_treq(code=500)
         self.client.start()
-        self.assertIsNone(self.client.get_index_total())
+        with self.stubs.consume(self.fail):
+            self.assertIsNone(self.client.get_index_total())
 
     def test_get_times_out(self):
         """
@@ -95,23 +87,31 @@ class BlocClientTests(SynchronousTestCase):
         ALLOCATING -> ALLOCATED -> ERRORS -> ALLOCATING -> ALLOCATED
         """
         # allocating
-        self.resource.resp = {"status": "ALLOCATING"}
+        self.setup_treq(body={"status": "ALLOCATING"})
         self.client.start()
-        self.assertIsNone(self.client.get_index_total())
+        with self.stubs.consume(self.fail):
+            self.assertIsNone(self.client.get_index_total())
+
         # allocated
-        self.resource.resp = {"status": "ALLOCATED", "index": 1, "total": 3}
+        self.setup_treq(body={"status": "ALLOCATED", "index": 1, "total": 3})
         self.clock.advance(10)
-        self.assertEqual(self.client.get_index_total(), (1, 3))
+        with self.stubs.consume(self.fail):
+            self.assertEqual(self.client.get_index_total(), (1, 3))
+
         # errors
-        self.resource.code = 500
+        self.setup_treq(code=500)
         self.clock.advance(10)
-        self.assertIsNone(self.client.get_index_total())
+        with self.stubs.consume(self.fail):
+            self.assertIsNone(self.client.get_index_total())
+
         # allocating
-        self.resource.code = 200
-        self.resource.resp = {"status": "ALLOCATING"}
+        self.setup_treq(body={"status": "ALLOCATING"})
         self.clock.advance(10)
-        self.assertIsNone(self.client.get_index_total())
+        with self.stubs.consume(self.fail):
+            self.assertIsNone(self.client.get_index_total())
+
         # allocated
-        self.resource.resp = {"status": "ALLOCATED", "index": 3, "total": 4}
+        self.setup_treq(body={"status": "ALLOCATED", "index": 3, "total": 4})
         self.clock.advance(10)
-        self.assertEqual(self.client.get_index_total(), (3, 4))
+        with self.stubs.consume(self.fail):
+            self.assertEqual(self.client.get_index_total(), (3, 4))
