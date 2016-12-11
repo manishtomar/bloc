@@ -55,12 +55,15 @@ class BlocClient(object):
         self._allocated = False
         self.log.error("Error getting index: {f}", f=f)
 
-    def _heartbeat(self):
+    def _get_index(self):
         d = self.treq.get('{}/index'.format(self.url.rstrip('/')),
                           headers={'X-Session-ID': [self._session_id]})
-        timeout_deferred(d, self._timeout, self.clock)
         d.addCallback(check_status, [200])
-        d.addCallback(treq.json_content)
+        return d.addCallback(treq.json_content)
+
+    def _heartbeat(self):
+        d = self._get_index()
+        timeout_deferred(d, self._timeout, self.clock)
         d.addCallback(self._set_index)
         d.addErrback(self._error_allocating)
         return d
