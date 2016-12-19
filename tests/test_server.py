@@ -1,5 +1,5 @@
 """
-Tests for :module:`participate`
+Tests for :module:`bloc.server`
 """
 
 import json
@@ -10,61 +10,76 @@ from twisted.trial.unittest import SynchronousTestCase
 from twisted.web.http import Headers, Request
 from twisted.web.test.requesthelper import DummyChannel
 
-from participate import (
-    GroupParticipants, NotAllocated, Participate, extract_client)
+from bloc.server import (
+    SettlingGroup, NotSettled, extract_client)
 
 
-class GroupParticipantsTests(SynchronousTestCase):
+class SettlingGroupTests(SynchronousTestCase):
     """
-    Tests for :func:`participate.GroupParticipants`
+    Tests for :func:`bloc.SettlingGroup`
     """
 
     def setUp(self):
         self.clock = Clock()
-        self.p = GroupParticipants(self.clock, 10)
+        self.g = SettlingGroup(self.clock, 10)
 
-    def _check_allocated(self, length):
-        self.assertTrue(self.p.allocated)
-        self.assertEqual(len(self.p), length)
+    def _check_settled(self, length):
+        self.assertTrue(self.g.settled)
+        self.assertEqual(len(self.g), length)
 
-    def test_add_part_and_settle(self):
+    def test_add_and_settle(self):
         """
-        Add a participant and see if it settles after 10 seconds
+        Add a member and see if it settles after 10 seconds
         """
-        self.p.add_participant('p1')
-        self.assertFalse(self.p.allocated)
+        self.g.add('m1')
+        self.assertFalse(self.g.settled)
         self.clock.advance(10)
-        self._check_allocated(1)
-        self.assertEqual(self.p['p1'], 1)
+        self._check_settled(1)
+        self.assertEqual(self.g.index_of('m1'), 1)
 
-    def test_add_remove_part_before_timer(self):
+    def test_add_remove_before_timer(self):
         """
-        Add participants, move the clock, remove one participant and check
+        Add members, move the clock, remove one member and check
         if it settles after 10 seconds has passed from the last removal
         """
-        self.p.add_participant('p1')
-        self.p.add_participant('p2')
-        self.assertFalse(self.p.allocated)
+        self.g.add('m1')
+        self.g.add('m2')
+        self.assertFalse(self.g.settled)
 
         self.clock.advance(5)
-        self.assertFalse(self.p.allocated)
-        self.p.remove_participants(['p1'])
-        self.assertFalse(self.p.allocated)
+        self.assertFalse(self.g.settled)
+        self.g.remove('m1')
+        self.assertFalse(self.g.settled)
 
-        # Still not allocated since timer got reset
+        # Still not settled since timer got reset
         self.clock.advance(6)
-        self.assertFalse(self.p.allocated)
+        self.assertFalse(self.g.settled)
 
         self.clock.advance(4)
-        self._check_allocated(1)
-        self.assertEqual(self.p['p2'], 1)
+        self._check_settled(1)
+        self.assertEqual(self.g.index_of('m2'), 1)
 
-    def test_not_allocated_error(self):
+    def test_add_existing(self):
         """
-        Getting index when not allocated raises `NotAllocated` error
+        Adding existing member to a settled group does nothing. The group
+        remains settled
         """
-        self.p.add_participant('p1')
-        self.assertRaises(NotAllocated, operator.getitem, self.p, 'p1')
+        self.test_add_and_settle()
+        self.g.add("m1")
+        self._check_settled(1)
+
+    def test_remove_error(self):
+        """
+        Removing unknown member raises `KeyError`
+        """
+        self.assertRaises(KeyError, self.g.remove, "bad")
+
+    def test_notsettled_error(self):
+        """
+        Getting index when not settled raises `NotSettled` error
+        """
+        self.g.add('m1')
+        self.assertRaises(NotSettled, self.g.index_of, 'm1')
 
 
 def request_with_session(sid, method="GET"):

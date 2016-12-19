@@ -1,135 +1,111 @@
 import json
 
+import attr
+from attr.validators import instance_of as iof
+
 from klein import Klein
 
+from twisted.internet.interfaces import IReactorTime
 from twisted.internet import task
 from twisted.python import log as default_log
 
 
-class EmptyLogger(object):
-    def msg(self, *a, **k):
-        pass
-    err = default_log.err
-
-
-class NotAllocated(Exception):
+class NotSettled(Exception):
     """
-    Raised when getting participent index when group
-    is not allocated
+    Raised when getting index of a member when group is not settled
     """
 
 
-class GroupParticipants(object):
+@attr.s
+class SettlingGroup(object):
     """
-    Manages group of participants. A group is allocated when `settle` time
-    has passed after adding/removing participants. Otherwise it is allocating
+    A group that "settles" down when there is no activity for `settle` seconds.
 
     :param IReactorTime clock: A twisted time provider
     :param float settle: Number of seconds to wait before allocating
     :param log: Twisted logger
     """
-    def __init__(self, clock, settle, log=EmptyLogger()):
-        self._clock = clock
-        self._settle = settle
-        self._participants = set()  # dict when allocated, set when not
-        self._allocated = False
-        self._timer = None
-        self.log = log
+    clock = attr.ib(validator=attr.validators.provides(IReactorTime))
+    settle = attr.ib(convert=float)
+    _members = attr.ib(default=attr.Factory(dict))
+    _settled = attr.ib(default=False)
+    _timer = attr.ib(default=None)
 
     def _reset_timer(self):
         if self._timer is not None and self._timer.active():
             self._timer.cancel()
-        self._timer = self._clock.callLater(self._settle, self._settled)
-        self._allocated = False
-        self.log.msg('reset timer')
+        self._timer = self.clock.callLater(self.settle, self._do_settling)
+        self._settled = False
+        #self.log.msg('reset timer')
 
-    def _settled(self):
-        self._participants = {p: i + 1 for i, p in enumerate(self._participants)}
-        self._allocated = True
-        self.log.msg('settled')
+    def _do_settling(self):
+        self._members = {p: i + 1 for i, p in enumerate(self._members.keys())}
+        self._settled = True
+        #self.log.msg('settled')
 
-    def add_participant(self, participant):
+    def add(self, member):
         """
-        Add participant to the group
+        Add member to the group
         """
-        if self._allocated:
-            self._participants = set(self._participants.keys()) | {participant}
-        else:
-            self._participants.add(participant)
+        if member in self._members:
+            return
+        self._members[member] = None
         self._reset_timer()
 
-    def remove_participants(self, participants):
+    def remove(self, member):
         """
-        Remove participants from the group
+        Remove member from the group.
+
+        :raises: ``KeyError` if member is not in the group
         """
-        participants = set(participants)
-        if self._allocated:
-            self._participants = set(self._participants.keys()) - participants
-        else:
-            self._participants -= participants
+        del self._members[member]
         self._reset_timer()
 
-    def index_of(self, participant):
+    def index_of(self, member):
         """
-        Return index of the participant
+        Return index allocated for the given member if group has settled
+
+        :raises: :obj:`NotSettled` if group is not settled
         """
-        if not self._allocated:
-            raise NotAllocated(participant)
-        return self._participants[participant]
+        if not self._settled:
+            raise NotSettled(member)
+        return self._members[member]
 
     def __len__(self):
-        return len(self._participants)
+        return len(self._members)
 
     @property
-    def allocated(self):
+    def settled(self):
         """
-        Is it allocated?
+        Is it settled?
         """
-        return self._allocated
-
-    def __str__(self):
-        s = 'allocated' if self._allocated else 'allocating'
-        return 'GroupParticipants: {}, {}'.format(s, str(self._participants))
+        return self._settled
 
 
-def extract_client(request):
+@attr.s
+class HeartbeatingClients(object):
     """
-    Return session id from the request
+    Group of clients that will heartbeat to remain active
     """
-    _id = request.requestHeaders.getRawHeaders('X-Session-ID', None)
-    return _id[0] if _id is not None else None
+    clock = attr.ib(validator=attr.validators.provides(IReactorTime))
+    timeout = attr.ib(convert=float)
+    interval = attr.ib(convert=float)
+    remove_cb = attr.ib()
+    _clients = attr.ib(default=attr.Factory(dict))
 
-
-class Participate(object):
-    """
-    Main application object
-    """
-
-    app = Klein()
-
-    def __init__(self, clock, timeout, settle, interval=1, log=EmptyLogger(),
-                 GroupParticipants=GroupParticipants):
+    def __init__(self, clock, timeout, interval, remove_cb):
         self._clock = clock
-        self._group = GroupParticipants(self._clock, settle, log)
         self._timeout = timeout
-
         self._clients = {}
+        self._remove_cb = remove_cb
         self._loop = task.LoopingCall(self._check_clients)
         self._loop.clock = self._clock
         # TODO: Call this from from another func
         self._loop.start(interval, False)
+        #self.log = log
 
-        self.log = log
-
-    def _add_client(self, client):
-        self._group.add_participant(client)
-        self._heartbeat_client(client)
-        self.log.msg('Added client', client)
-
-    def _remove_clients(self, clients):
-        for client in clients:
-            del self._clients[client]
-        self._group.remove_participants(clients)
+    def remove(self, client):
+        del self._clients[client]
 
     def _check_clients(self):
         now = self._clock.seconds()
@@ -141,35 +117,57 @@ class Participate(object):
                     'Client {} timed out after {} seconds'.format(client,
                                                                   inactive))
                 clients_to_remove.append(client)
-        if clients_to_remove:
-            self._remove_clients(clients_to_remove)
+        for client in clients_to_remove:
+            self.remove(client)
+            self._remove_cb(client)
 
-    def _heartbeat_client(self, client):
+    def heartbeat(self, client):
+        if client not in self._clients:
+            self.log.msg('Adding client', client)
         self._clients[client] = self._clock.seconds()
+
+
+def extract_client(request):
+    """
+    Return session id from the request
+    """
+    _id = request.requestHeaders.getRawHeaders('X-Session-ID', None)
+    return _id[0] if _id is not None else None
+
+
+class Bloc(object):
+    """
+    Main application object
+    """
+
+    app = Klein()
+
+    def __init__(self, clock, timeout, settle, interval=1,
+                 HeartbeatingClients=HeartbeatingClients):
+        self._group = SettlingGroup(clock, settle)
+        self._clients = HeartbeatingClients(clock, timeout, settle, interval, self._group.remove)
 
     @app.route('/disconnect', methods=['POST'])
     def cancel_session(self, request):
         client = extract_client(request)
-        if client in self._clients:
-            self._remove_clients([client])
+        self._clients.remove(client)
+        self._group.remove(client)
         return "{}"
 
     @app.route('/index', methods=['GET'])
     def get_index(self, request):
         client = extract_client(request)
-        if client in self._clients:
-            self._heartbeat_client(client)
-        else:
-            self._add_client(client)
-        if self._group.allocated:
+        self._clients.heartbeat(client)
+        self._group.add(client)
+        if self._group.settled:
             return json.dumps(
-                {'status': 'ALLOCATED',
+                {'status': 'SETTLED',
                  'index': self._group.index_of(client),
                  'total': len(self._group)})
         else:
-            return json.dumps({'status': 'ALLOCATING'})
+            return json.dumps({'status': 'SETTLING'})
 
 
 if __name__ == '__main__':
     from twisted.internet import reactor
-    Participate(reactor, 6, 10, log=default_log).app.run('localhost', 8080)
+    Bloc(reactor, 6, 10).app.run('localhost', 8080)
