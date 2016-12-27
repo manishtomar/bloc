@@ -74,6 +74,9 @@ class SettlingGroup(object):
     def __len__(self):
         return len(self._members)
 
+    def __contains__(self, member):
+        return member in self._members
+
     @property
     def settled(self):
         """
@@ -90,48 +93,45 @@ class HeartbeatingClients(object):
     clock = attr.ib(validator=attr.validators.provides(IReactorTime))
     timeout = attr.ib(convert=float)
     interval = attr.ib(convert=float)
-    remove_cb = attr.ib()
+    _remove_cb = attr.ib()
     _clients = attr.ib(default=attr.Factory(dict))
 
-    def __init__(self, clock, timeout, interval, remove_cb):
-        self._clock = clock
-        self._timeout = timeout
-        self._clients = {}
-        self._remove_cb = remove_cb
+    def __attrs_post_init__(self):
         self._loop = task.LoopingCall(self._check_clients)
-        self._loop.clock = self._clock
+        self._loop.clock = self.clock
         # TODO: Call this from from another func
-        self._loop.start(interval, False)
+        self._loop.start(self.interval, False)
         #self.log = log
 
     def remove(self, client):
         del self._clients[client]
 
     def _check_clients(self):
-        now = self._clock.seconds()
+        now = self.clock.seconds()
         clients_to_remove = []
-        for client, last_active in self._clients.iteritems():
+        for client, last_active in self._clients.items():
             inactive = now - last_active
-            if inactive > self._timeout:
-                self.log.msg(
-                    'Client {} timed out after {} seconds'.format(client,
-                                                                  inactive))
+            if inactive > self.timeout:
+                #self.log.msg('Client {} timed out after {} seconds'.format(client, inactive))
                 clients_to_remove.append(client)
         for client in clients_to_remove:
             self.remove(client)
             self._remove_cb(client)
 
     def heartbeat(self, client):
-        if client not in self._clients:
-            self.log.msg('Adding client', client)
-        self._clients[client] = self._clock.seconds()
+        #if client not in self._clients:
+        #    self.log.msg('Adding client', client)
+        self._clients[client] = self.clock.seconds()
+
+    def __contains__(self, client):
+        return client in self._clients
 
 
 def extract_client(request):
     """
     Return session id from the request
     """
-    _id = request.requestHeaders.getRawHeaders('X-Session-ID', None)
+    _id = request.requestHeaders.getRawHeaders('Bloc-Session-ID', None)
     return _id[0] if _id is not None else None
 
 
@@ -142,17 +142,16 @@ class Bloc(object):
 
     app = Klein()
 
-    def __init__(self, clock, timeout, settle, interval=1,
-                 HeartbeatingClients=HeartbeatingClients):
+    def __init__(self, clock, timeout, settle, interval=1):
         self._group = SettlingGroup(clock, settle)
-        self._clients = HeartbeatingClients(clock, timeout, settle, interval, self._group.remove)
+        self._clients = HeartbeatingClients(clock, timeout, interval, self._group.remove)
 
-    @app.route('/disconnect', methods=['POST'])
+    @app.route('/session', methods=['DELETE'])
     def cancel_session(self, request):
         client = extract_client(request)
         self._clients.remove(client)
         self._group.remove(client)
-        return "{}"
+        return "{}".encode("utf-8")
 
     @app.route('/index', methods=['GET'])
     def get_index(self, request):
@@ -163,9 +162,9 @@ class Bloc(object):
             return json.dumps(
                 {'status': 'SETTLED',
                  'index': self._group.index_of(client),
-                 'total': len(self._group)})
+                 'total': len(self._group)}).encode("utf-8")
         else:
-            return json.dumps({'status': 'SETTLING'})
+            return json.dumps({'status': 'SETTLING'}).encode("utf-8")
 
 
 if __name__ == '__main__':

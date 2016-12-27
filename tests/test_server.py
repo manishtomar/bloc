@@ -11,7 +11,7 @@ from twisted.web.http import Headers, Request
 from twisted.web.test.requesthelper import DummyChannel
 
 from bloc.server import (
-    SettlingGroup, NotSettled, extract_client)
+    SettlingGroup, NotSettled, extract_client, HeartbeatingClients, Bloc)
 
 
 class SettlingGroupTests(SynchronousTestCase):
@@ -85,7 +85,7 @@ class SettlingGroupTests(SynchronousTestCase):
 def request_with_session(sid, method="GET"):
     r = Request(DummyChannel(), False)
     r.method = method
-    r.requestHeaders = Headers({'X-Session-ID': [sid]})
+    r.requestHeaders = Headers({'Bloc-Session-ID': [sid]})
     return r
 
 
@@ -98,111 +98,82 @@ class ExtractClientTests(SynchronousTestCase):
         self.assertIsNone(extract_client(Request(DummyChannel(), False)))
 
 
-class FakeGroup(object):
-    def __init__(self, *a):
-        self.items = {}
-        self.allocated = False
-    def add_participant(self, p):
-        self.items[p] = len(self.items) + 1
-    def remove_participants(self, ps):
-        for p in ps:
-            del self.items[p]
-    def index_of(self, p):
-        print self.items
-        return self.items[p]
-    def __len__(self):
-        return len(self.items)
-
-
-class ParticipateTests(SynchronousTestCase):
+class HeartbeatingClientsTests(SynchronousTestCase):
     """
-    Tests for :obj:`Participate`
+    Tests for :obj:`HeartbeatingClients`
     """
     def setUp(self):
         self.clock = Clock()
-        self.p = Participate(self.clock, 3, 10, GroupParticipants=FakeGroup)
+        self.c = HeartbeatingClients(self.clock, 5, 1, self.remove)
+        self.removed_clients = set()
 
-    def test_get_index_allocating(self):
-        """
-        `get_index` returns allocating json if group is allocating
-        """
-        self.p._group.allocated = False
-        r = self.p.get_index(request_with_session('s'))
-        self.assertEqual(json.loads(r), {'status': 'ALLOCATING'})
+    def remove(self, client):
+        self.removed_clients.add(client)
 
-    def test_get_index_allocated(self):
+    def test_all(self):
         """
-        `get_index` returns allocated json with index and total if group
-        is allocated
+        Only clients that has not hearbeat will be removed. Others will remain
         """
-        self.p._group.allocated = True
-        self.p._group.items = {'s': 1}
-        r = self.p.get_index(request_with_session('s'))
+        self.c.heartbeat("c1")
+        self.c.heartbeat("c2")
+        self.clock.advance(1)
+        self.c.heartbeat("c3")
+        self.clock.advance(4)
+        self.c.heartbeat("c3")
+        self.clock.advance(2)
+        self.assertNotIn("c1", self.c)
+        self.assertNotIn("c2", self.c)
+        self.assertEqual(self.removed_clients, set(["c1", "c2"]))
+
+    def test_remove(self):
+        """
+        Client removed via `self.remove` is not checked anymore
+        """
+        self.c.heartbeat("c1")
+        self.c.heartbeat("c2")
+        self.c.remove("c1")
+        self.assertNotIn("c1", self.c)
+        self.clock.advance(6)
+        self.assertNotIn("c1", self.removed_clients)
+
+
+class BlocTests(SynchronousTestCase):
+    """
+    Tests for :obj:`Bloc`
+    """
+    def setUp(self):
+        self.clock = Clock()
+        self.b = Bloc(self.clock, 3, 10)
+
+    def test_get_index_settling(self):
+        """
+        `get_index` heartbeats and adds client to the group and returns settling
+        json if group is settling
+        """
+        r = self.b.get_index(request_with_session('c'))
+        self.assertIn("c", self.b._group)
+        self.assertIn("c", self.b._clients)
+        self.assertEqual(json.loads(r.decode("utf-8")), {'status': 'SETTLING'})
+
+    def test_get_index_settled(self):
+        """
+        `get_index` heartbeats and adds client to the group and returns settled
+        json with index and total if group has settled
+        """
+        for i in range(int(11 / 3) + 1):
+            self.b.get_index(request_with_session('s'))
+            self.clock.advance(3)
+        r = self.b.get_index(request_with_session('s'))
         self.assertEqual(
-            json.loads(r),
-            {'status': 'ALLOCATED', 'index': 1, 'total': 1})
-
-    def test_get_index_new_client(self):
-        """
-        `get_index` adds new client to the group
-        """
-        self.p.get_index(request_with_session('s'))
-        self.assertEqual(self.p._group.items.keys(), ['s'])
-
-    def test_get_index_existing_client(self):
-        """
-        `get_index` stores clock seconds for existing client
-        """
-        # this will create and heartbeat it
-        self.p.get_index(request_with_session('new'))
-        self.assertEqual(self.p._clients['new'], 0)
-        self.clock.advance(8)
-        # this will heartbeat
-        self.p.get_index(request_with_session('new'))
-        self.assertEqual(self.p._clients['new'], 8)
-
-    def test_timeout(self):
-        """
-        Times out client after inactive time
-        """
-        self.p.get_index(request_with_session('new'))
-        self.assertIn('new', self.p._group.items)
-        self.clock.pump([1] * 4)
-        self.assertNotIn('new', self.p._group.items)
-
-    def test_client_active(self):
-        """
-        If client sends request within interval, it remains active
-        """
-        self.p.get_index(request_with_session('new'))
-        self.assertIn('new', self.p._group.items)
-        self.clock.pump([1] * 2)
-        self.p.get_index(request_with_session('new'))
-        self.assertIn('new', self.p._group.items)
+            json.loads(r.decode("utf-8")),
+            {'status': 'SETTLED', 'index': 1, 'total': 1})
 
     def test_disconnect(self):
         """
         Disconnects session by removing it
         """
-        self.p.get_index(request_with_session('new'))
-        self.assertIn('new', self.p._group.items)
-        r = self.p.cancel_session(request_with_session("new", "POST"))
-        self.assertEqual(r, "{}")
-        self.assertNotIn('new', self.p._group.items)
-        self.assertNotIn('new', self.p._clients)
-
-    def test_disconnect_unknown(self):
-        """
-        /disconnect does nothing if session is not found
-        """
-        r = self.p.cancel_session(request_with_session("unknown", "POST"))
-        self.assertEqual(r, "{}")
-        self.assertNotIn('unknown', self.p._group.items)
-        self.assertNotIn('unknown', self.p._clients)
-
-    def test_disconnect_no_header(self):
-        """
-        /disconnect does nothing if session info is not there in header
-        """
-        r = self.p.cancel_session(Request(DummyChannel(), False))
-        self.assertEqual(r, "{}")
+        self.b.get_index(request_with_session('new'))
+        r = self.b.cancel_session(request_with_session("new", "DELETE"))
+        self.assertEqual(r.decode("utf-8"), "{}")
+        self.assertNotIn('new', self.b._group)
+        self.assertNotIn('new', self.b._clients)
