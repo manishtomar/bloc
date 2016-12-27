@@ -30,8 +30,8 @@ setup(
         "Programming Language :: Python :: 2.7",
         "Topic :: Internet :: WWW/HTTP"
     ],
-    packages=["bloc", "bloctests"],
-    package_dir={"": "src", "bloctests": "tests"},
+    packages=["bloc"],
+    package_dir={"": "src"},
     install_requires=[
         "twisted>=16.0.0",
         "treq>=15.1.0",
