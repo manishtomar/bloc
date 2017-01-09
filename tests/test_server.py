@@ -177,3 +177,12 @@ class BlocTests(SynchronousTestCase):
         self.assertEqual(r.decode("utf-8"), "{}")
         self.assertNotIn('new', self.b._group)
         self.assertNotIn('new', self.b._clients)
+
+    def test_timeout_removed(self):
+        """
+        On timeout HeartbeatingClients removes client from SettlingGroup
+        """
+        self.b.get_index(request_with_session('s'))
+        self.clock.advance(4);
+        self.assertNotIn("s", self.b._group);
+        self.assertNotIn("s", self.b._clients);
