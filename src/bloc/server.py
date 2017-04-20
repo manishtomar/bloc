@@ -21,8 +21,8 @@ class SettlingGroup(object):
     """
     A group that "settles" down when there is no activity for `settle` seconds.
 
-    :param IReactorTime clock: A twisted time provider
-    :param float settle: Number of seconds to wait before allocating
+    :param clock: A twisted time provider that implements :obj:`IReactorTime`
+    :param float settle: Number of seconds to wait before settling
     :param log: Twisted logger
     """
     clock = attr.ib(validator=attr.validators.provides(IReactorTime))
@@ -107,6 +107,8 @@ class HeartbeatingClients(object):
         del self._clients[client]
 
     def _check_clients(self):
+        # This is O(n). May have issues when (say) 1000+ clients connect. See if a heap can be used
+        # instead
         now = self.clock.seconds()
         clients_to_remove = []
         for client, last_active in self._clients.items():
@@ -137,12 +139,24 @@ def extract_client(request):
 
 class Bloc(object):
     """
-    Main application object
+    Main server object that clients talk to
     """
 
     app = Klein()
 
     def __init__(self, clock, timeout, settle, interval=1):
+        """
+        Create Bloc object
+
+        :param clock: A twisted time provider that implements :obj:`IReactorTime`. Typically main
+            twisted reactor object.
+        :param float timeout: Maximum number of seconds to wait for a client to hearbeat before
+            removing it from the group and change it to SETTLING.
+        :param float settle: Number of seconds to wait before settling. Ensures that all clients
+            are settled for this much time before marking the group as SETTLED
+        :param float interval: Internal interval to check all clients heartbeat status. Defaults to
+            1 second. Mostly, this doesn't need to be changed.
+        """
         self._group = SettlingGroup(clock, settle)
         self._clients = HeartbeatingClients(clock, timeout, interval, self._group.remove)
 
@@ -169,4 +183,4 @@ class Bloc(object):
 
 if __name__ == '__main__':
     from twisted.internet import reactor
-    Bloc(reactor, 6, 10).app.run('localhost', 8080)
+    Bloc(reactor, 6, 10).app.run('localhost', 8989)

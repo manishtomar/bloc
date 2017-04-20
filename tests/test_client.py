@@ -27,33 +27,31 @@ class BlocClientTests(SynchronousTestCase):
 
     def setUp(self):
         self.clock = Clock()
-        self.client = BlocClient(self.clock, 'http://url', 10, 3, session_id='sid')
+        self.client = BlocClient(self.clock, 'http://url', 3, session_id='sid')
 
     def setup_treq(self, code=200, body={}):
         self.stubs = RequestSequence(
-            [(("get", "http://url/index", {}, HasHeaders({"X-Session-ID": ["sid"]}), b''),
+            [(("get", "http://url/index", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
               (code, {}, json.dumps(body)))],
             self.fail)
         self.client.treq = StubTreq(StringStubbingResource(self.stubs))
 
-    def test_allocated(self):
+    def test_settled(self):
         """
-        When getting index returns ALLOCATED then it is set and is returned
-        in `get_index_total`
+        When getting index returns SETTLED then it is set and is returned in `get_index_total`
         """
-        self.setup_treq(body={"status": "ALLOCATED", "index": 1, "total": 1})
-        self.client.start()
+        self.setup_treq(body={"status": "SETTLED", "index": 1, "total": 1})
+        self.client.startService()
         with self.stubs.consume(self.fail):
             self.assertEqual(self.client.get_index_total(), (1, 1))
-            self.assertTrue(self.client._allocated)
+            self.assertTrue(self.client._settled)
 
-    def test_allocating(self):
+    def test_settling(self):
         """
-        When getting index returns ALLOCATING, then get_index_total returns
-        None
+        When getting index returns SETTLING, then get_index_total returns None
         """
-        self.setup_treq(body={"status": "ALLOCATING"})
-        self.client.start()
+        self.setup_treq(body={"status": "SETTLING"})
+        self.client.startService()
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
@@ -62,7 +60,7 @@ class BlocClientTests(SynchronousTestCase):
         If get index errors, then get_index_total will return None
         """
         self.setup_treq(code=500)
-        self.client.start()
+        self.client.startService()
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
@@ -70,48 +68,48 @@ class BlocClientTests(SynchronousTestCase):
         """
         If get index times out then get_index_total will return None
         """
-        # lets start with allocated
-        self.test_allocated()
+        # lets start with settled
+        self.test_settled()
         # setup client that does not return
         self.client.treq = StubTreq(DeferredResource(Deferred()))
         # next heartbeat to get index again
-        self.clock.advance(10)
-        # no response
         self.clock.advance(3)
+        # no response
+        self.clock.advance(5)
         self.assertIsNone(self.client.get_index_total())
 
     def test_sequence(self):
         """
         Test sequence of changes from server:
         TODO: this should probably be done via hypothesis
-        ALLOCATING -> ALLOCATED -> ERRORS -> ALLOCATING -> ALLOCATED
+        SETTLING -> SETTLED -> ERRORS -> SETTLING -> SETTLED
         """
-        # allocating
-        self.setup_treq(body={"status": "ALLOCATING"})
-        self.client.start()
+        # settling
+        self.setup_treq(body={"status": "SETTLING"})
+        self.client.startService()
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
         # allocated
-        self.setup_treq(body={"status": "ALLOCATED", "index": 1, "total": 3})
-        self.clock.advance(10)
+        self.setup_treq(body={"status": "SETTLED", "index": 1, "total": 3})
+        self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertEqual(self.client.get_index_total(), (1, 3))
 
         # errors
         self.setup_treq(code=500)
-        self.clock.advance(10)
+        self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
         # allocating
-        self.setup_treq(body={"status": "ALLOCATING"})
-        self.clock.advance(10)
+        self.setup_treq(body={"status": "SETTLING"})
+        self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
         # allocated
-        self.setup_treq(body={"status": "ALLOCATED", "index": 3, "total": 4})
-        self.clock.advance(10)
+        self.setup_treq(body={"status": "SETTLED", "index": 3, "total": 4})
+        self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertEqual(self.client.get_index_total(), (3, 4))

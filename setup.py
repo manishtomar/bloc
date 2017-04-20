@@ -33,7 +33,7 @@ setup(
     packages=["bloc"],
     package_dir={"": "src"},
     install_requires=[
-        "twisted>=16.0.0",
+        "twisted>=16.5.0",
         "treq>=15.1.0",
         "klein>=15.0.0"
     ]
