@@ -5,9 +5,10 @@ from attr.validators import instance_of as iof
 
 from klein import Klein
 
+from twisted.application.service import MultiService
+from twisted.application.internet import TimerService
 from twisted.internet.interfaces import IReactorTime
 from twisted.internet import task
-from twisted.python import log as default_log
 
 
 class NotSettled(Exception):
@@ -23,7 +24,6 @@ class SettlingGroup(object):
 
     :param clock: A twisted time provider that implements :obj:`IReactorTime`
     :param float settle: Number of seconds to wait before settling
-    :param log: Twisted logger
     """
     clock = attr.ib(validator=attr.validators.provides(IReactorTime))
     settle = attr.ib(convert=float)
@@ -86,7 +86,7 @@ class SettlingGroup(object):
 
 
 @attr.s
-class HeartbeatingClients(object):
+class HeartbeatingClients(MultiService):
     """
     Group of clients that will heartbeat to remain active
     """
@@ -97,18 +97,14 @@ class HeartbeatingClients(object):
     _clients = attr.ib(default=attr.Factory(dict))
 
     def __attrs_post_init__(self):
-        self._loop = task.LoopingCall(self._check_clients)
-        self._loop.clock = self.clock
-        # TODO: Call this from from another func
-        self._loop.start(self.interval, False)
-        #self.log = log
+        super(HeartbeatingClients, self).__init__()
+        self.addService(TimerService(self.interval, self._check_clients))
 
     def remove(self, client):
         del self._clients[client]
 
     def _check_clients(self):
-        # This is O(n). May have issues when (say) 1000+ clients connect. See if a heap can be used
-        # instead
+        # This is O(n). May have issues when n is large. See if a heap can be used instead
         now = self.clock.seconds()
         clients_to_remove = []
         for client, last_active in self._clients.items():
@@ -137,7 +133,7 @@ def extract_client(request):
     return _id[0] if _id is not None else None
 
 
-class Bloc(object):
+class Bloc(MultiService):
     """
     Main server object that clients talk to
     """
@@ -159,6 +155,8 @@ class Bloc(object):
         """
         self._group = SettlingGroup(clock, settle)
         self._clients = HeartbeatingClients(clock, timeout, interval, self._group.remove)
+        super(Bloc, self).__init__()
+        self.addService(self._clients)
 
     @app.route('/session', methods=['DELETE'])
     def cancel_session(self, request):
@@ -179,8 +177,3 @@ class Bloc(object):
                  'total': len(self._group)}).encode("utf-8")
         else:
             return json.dumps({'status': 'SETTLING'}).encode("utf-8")
-
-
-if __name__ == '__main__':
-    from twisted.internet import reactor
-    Bloc(reactor, 6, 10).app.run('localhost', 8989)

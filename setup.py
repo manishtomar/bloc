@@ -30,7 +30,7 @@ setup(
         "Programming Language :: Python :: 2.7",
         "Topic :: Internet :: WWW/HTTP"
     ],
-    packages=["bloc"],
+    packages=["bloc", "twisted.plugins"],
     package_dir={"": "src"},
     install_requires=[
         "twisted>=16.5.0",
