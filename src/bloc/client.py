@@ -1,13 +1,12 @@
 from __future__ import print_function
 
-import random
 import uuid
 
 import treq
 
 from twisted.application.service import Service
 from twisted.internet import task
-from twisted.logger import Logger, LogLevel
+from twisted.logger import Logger
 
 from bloc.utils import check_status
 

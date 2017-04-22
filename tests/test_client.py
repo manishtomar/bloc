@@ -3,18 +3,12 @@ Tests for :module:`client`
 """
 
 import json
-import operator
-
-import mock
 
 from treq.testing import RequestSequence, StringStubbingResource, StubTreq, HasHeaders
 
 from twisted.internet.defer import Deferred
 from twisted.internet.task import Clock
 from twisted.trial.unittest import SynchronousTestCase
-from twisted.web.http import Headers, Request
-from twisted.web.resource import Resource
-from twisted.web.test.requesthelper import DummyChannel
 from twisted.web.util import DeferredResource
 
 from bloc.client import BlocClient
