@@ -113,3 +113,32 @@ class BlocClientTests(SynchronousTestCase):
         self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertEqual(self.client.get_index_total(), (3, 4))
+
+    def test_stopservice_deletes_session(self):
+        """
+        :func:`stopService` will delete the session and will stop the loop
+        """
+        self.test_settled()
+        stubs = RequestSequence(
+            [(("delete", "http://url/session", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
+              (200, {}, b''))],
+            self.fail)
+        self.client.treq = StubTreq(StringStubbingResource(stubs))
+        with stubs.consume(self.fail):
+            d = self.client.stopService()
+            self.assertIsNone(self.successResultOf(d))
+            # Moving time would fail treq if it tried to heartbeat
+            self.clock.advance(4)
+
+    def test_stopservice_ignores_delete_session(self):
+        """
+        :func:`stopService` will try deleting the session for 1 second and will stop the loop
+        """
+        self.test_settled()
+        self.client.treq = StubTreq(DeferredResource(Deferred()))
+        d = self.client.stopService()
+        self.assertNoResult(d)
+        self.clock.advance(1)
+        self.assertIsNone(self.successResultOf(d))
+        # Moving time would fail treq if it tried to heartbeat
+        self.clock.advance(4)

@@ -83,6 +83,9 @@ class BlocClient(Service):
         Stop heartbeating
         """
         super(BlocClient, self).stopService()
+        # Delete session before shutdown but do not worry about response if it not received
+        # within 1 second because we don't want to block shutdown of twisted app and server will
+        # anyway cancel the session without next heartbeat
         d = self.treq.delete(self._url("session"), headers={'Bloc-Session-ID': [self._session_id]})
         d.addTimeout(1, self.clock)
         return d.addBoth(lambda r: self._loop.stop())
@@ -98,11 +101,11 @@ class BlocClient(Service):
         return (self._index, self._total)
 
 
-def print_index(p):
+def print_index(p): # noqa
     print('index', p.get_index_total())
 
 
-def test():
+def test(): # noqa
     from twisted.internet import reactor
     p = BlocClient(reactor, 'http://localhost:8989', 3)
     p.startService()
