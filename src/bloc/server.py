@@ -1,14 +1,12 @@
 import json
 
 import attr
-from attr.validators import instance_of as iof
 
 from klein import Klein
 
 from twisted.application.service import MultiService
 from twisted.application.internet import TimerService
 from twisted.internet.interfaces import IReactorTime
-from twisted.internet import task
 from twisted.logger import Logger
 
 
@@ -97,6 +95,7 @@ class HeartbeatingClients(MultiService):
     interval = attr.ib(convert=float)
     _remove_cb = attr.ib()
     _clients = attr.ib(default=attr.Factory(dict))
+    log = Logger()
 
     def __attrs_post_init__(self):
         super(HeartbeatingClients, self).__init__()
@@ -114,15 +113,15 @@ class HeartbeatingClients(MultiService):
         for client, last_active in self._clients.items():
             inactive = now - last_active
             if inactive > self.timeout:
-                #self.log.msg('Client {} timed out after {} seconds'.format(client, inactive))
+                self.log.info('Client {c} timed out after {t} seconds', c=client, t=inactive)
                 clients_to_remove.append(client)
         for client in clients_to_remove:
             self.remove(client)
             self._remove_cb(client)
 
     def heartbeat(self, client):
-        #if client not in self._clients:
-        #    self.log.msg('Adding client', client)
+        if client not in self._clients:
+            self.log.info('Adding client {c}', c=client)
         self._clients[client] = self.clock.seconds()
 
     def __contains__(self, client):

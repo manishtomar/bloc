@@ -3,7 +3,6 @@ Tests for :module:`bloc.server`
 """
 
 import json
-import operator
 
 from twisted.internet.task import Clock
 from twisted.trial.unittest import SynchronousTestCase
