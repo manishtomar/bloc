@@ -9,7 +9,7 @@ from twisted.application.service import Service
 from twisted.internet import task
 from twisted.logger import Logger, LogLevel
 
-from utils import check_status
+from bloc.utils import check_status
 
 
 class BlocClient(Service):

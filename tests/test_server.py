@@ -104,23 +104,21 @@ class HeartbeatingClientsTests(SynchronousTestCase):
     """
     def setUp(self):
         self.clock = Clock()
-        self.c = HeartbeatingClients(self.clock, 5, 1, self.remove)
         self.removed_clients = set()
-
-    def remove(self, client):
-        self.removed_clients.add(client)
+        self.c = HeartbeatingClients(self.clock, 5, 1, self.removed_clients.add)
 
     def test_all(self):
         """
         Only clients that has not hearbeat will be removed. Others will remain
         """
+        self.c.startService()
         self.c.heartbeat("c1")
         self.c.heartbeat("c2")
         self.clock.advance(1)
         self.c.heartbeat("c3")
-        self.clock.advance(4)
+        self.clock.pump([1] * 4)
         self.c.heartbeat("c3")
-        self.clock.advance(2)
+        self.clock.pump([1] * 2)
         self.assertNotIn("c1", self.c)
         self.assertNotIn("c2", self.c)
         self.assertEqual(self.removed_clients, set(["c1", "c2"]))
@@ -129,11 +127,12 @@ class HeartbeatingClientsTests(SynchronousTestCase):
         """
         Client removed via `self.remove` is not checked anymore
         """
+        self.c.startService()
         self.c.heartbeat("c1")
         self.c.heartbeat("c2")
         self.c.remove("c1")
         self.assertNotIn("c1", self.c)
-        self.clock.advance(6)
+        self.clock.pump([1] * 6)
         self.assertNotIn("c1", self.removed_clients)
 
 
@@ -144,6 +143,7 @@ class BlocTests(SynchronousTestCase):
     def setUp(self):
         self.clock = Clock()
         self.b = Bloc(self.clock, 3, 10)
+        self.b.startService()
 
     def test_get_index_settling(self):
         """
@@ -162,7 +162,7 @@ class BlocTests(SynchronousTestCase):
         """
         for i in range(int(11 / 3) + 1):
             self.b.get_index(request_with_session('s'))
-            self.clock.advance(3)
+            self.clock.pump([1] * 3)
         r = self.b.get_index(request_with_session('s'))
         self.assertEqual(
             json.loads(r.decode("utf-8")),
@@ -183,6 +183,6 @@ class BlocTests(SynchronousTestCase):
         On timeout HeartbeatingClients removes client from SettlingGroup
         """
         self.b.get_index(request_with_session('s'))
-        self.clock.advance(4);
-        self.assertNotIn("s", self.b._group);
-        self.assertNotIn("s", self.b._clients);
+        self.clock.pump([1] * 4)
+        self.assertNotIn("s", self.b._group)
+        self.assertNotIn("s", self.b._clients)

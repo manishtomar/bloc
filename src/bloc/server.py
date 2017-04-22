@@ -9,6 +9,7 @@ from twisted.application.service import MultiService
 from twisted.application.internet import TimerService
 from twisted.internet.interfaces import IReactorTime
 from twisted.internet import task
+from twisted.logger import Logger
 
 
 class NotSettled(Exception):
@@ -99,7 +100,9 @@ class HeartbeatingClients(MultiService):
 
     def __attrs_post_init__(self):
         super(HeartbeatingClients, self).__init__()
-        self.addService(TimerService(self.interval, self._check_clients))
+        timer = TimerService(self.interval, self._check_clients)
+        timer.clock = self.clock
+        self.addService(timer)
 
     def remove(self, client):
         del self._clients[client]
