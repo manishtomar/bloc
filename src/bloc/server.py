@@ -30,18 +30,19 @@ class SettlingGroup(object):
     _members = attr.ib(default=attr.Factory(dict))
     _settled = attr.ib(default=False)
     _timer = attr.ib(default=None)
+    _log = Logger()
 
     def _reset_timer(self):
         if self._timer is not None and self._timer.active():
             self._timer.cancel()
         self._timer = self.clock.callLater(self.settle, self._do_settling)
         self._settled = False
-        #self.log.msg('reset timer')
+        self._log.info('reset timer')
 
     def _do_settling(self):
         self._members = {p: i + 1 for i, p in enumerate(self._members.keys())}
         self._settled = True
-        #self.log.msg('settled')
+        self._log.info('settled with {n} members', n=len(self._members))
 
     def add(self, member):
         """
