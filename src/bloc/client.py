@@ -49,7 +49,7 @@ class BlocClient(Service):
         Start getting the index and effectively heartbeating
         """
         super(BlocClient, self).startService()
-        self.loopd = self._loop.start(self._interval, True)
+        self._loop.start(self._interval, True)
 
     def _set_index(self, content):
         if content['status'] == 'SETTLED':
@@ -80,7 +80,7 @@ class BlocClient(Service):
 
     def stopService(self):
         """
-        Stop heartbeating
+        Delete session and stop heartbeating
         """
         super(BlocClient, self).stopService()
         # Delete session before shutdown but do not worry about response if it not received

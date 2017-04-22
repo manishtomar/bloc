@@ -30,10 +30,11 @@ class BlocClientTests(SynchronousTestCase):
         self.client = BlocClient(self.clock, 'http://url', 3, session_id='sid')
 
     def setup_treq(self, code=200, body={}):
+        self.async_failures = []
         self.stubs = RequestSequence(
-            [(("get", "http://url/index", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
-              (code, {}, json.dumps(body)))],
-            self.fail)
+            [((b"get", "http://url/index", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
+              (code, {}, json.dumps(body).encode("utf-8")))],
+            self.async_failures.append)
         self.client.treq = StubTreq(StringStubbingResource(self.stubs))
 
     def test_settled(self):
@@ -45,6 +46,7 @@ class BlocClientTests(SynchronousTestCase):
         with self.stubs.consume(self.fail):
             self.assertEqual(self.client.get_index_total(), (1, 1))
             self.assertTrue(self.client._settled)
+        self.assertEqual(self.async_failures, [])
 
     def test_settling(self):
         """
@@ -54,6 +56,7 @@ class BlocClientTests(SynchronousTestCase):
         self.client.startService()
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
+        self.assertEqual(self.async_failures, [])
 
     def test_get_errors(self):
         """
@@ -63,6 +66,7 @@ class BlocClientTests(SynchronousTestCase):
         self.client.startService()
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
+        self.assertEqual(self.async_failures, [])
 
     def test_get_times_out(self):
         """
@@ -90,7 +94,7 @@ class BlocClientTests(SynchronousTestCase):
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
-        # allocated
+        # settled
         self.setup_treq(body={"status": "SETTLED", "index": 1, "total": 3})
         self.clock.advance(3)
         with self.stubs.consume(self.fail):
@@ -102,17 +106,18 @@ class BlocClientTests(SynchronousTestCase):
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
-        # allocating
+        # settling
         self.setup_treq(body={"status": "SETTLING"})
         self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertIsNone(self.client.get_index_total())
 
-        # allocated
+        # settled
         self.setup_treq(body={"status": "SETTLED", "index": 3, "total": 4})
         self.clock.advance(3)
         with self.stubs.consume(self.fail):
             self.assertEqual(self.client.get_index_total(), (3, 4))
+        self.assertEqual(self.async_failures, [])
 
     def test_stopservice_deletes_session(self):
         """
@@ -120,7 +125,7 @@ class BlocClientTests(SynchronousTestCase):
         """
         self.test_settled()
         stubs = RequestSequence(
-            [(("delete", "http://url/session", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
+            [((b"delete", "http://url/session", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
               (200, {}, b''))],
             self.fail)
         self.client.treq = StubTreq(StringStubbingResource(stubs))
