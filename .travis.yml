@@ -21,4 +21,4 @@ script:
   - tox
 
 after_success:
-  - tox -e coverage-upload
+  - tox -e codecov
