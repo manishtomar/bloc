@@ -19,3 +19,10 @@ install:
 
 script:
   - tox
+
+after_success:
+  - tox -e codecov
+
+branches:
+  only:
+    - master

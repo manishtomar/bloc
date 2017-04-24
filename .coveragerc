@@ -1,0 +1,9 @@
+[run]
+branch = True
+source =
+    bloc
+
+[paths]
+source =
+   src/bloc
+   .tox/*/lib/python*/site-packages/attr
