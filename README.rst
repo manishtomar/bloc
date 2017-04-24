@@ -5,7 +5,11 @@ bloc
    :target: https://travis-ci.org/manishtomar/bloc
    :alt: CI Status
 
-Simple single-master RESTful group membership framework that helps in partitioning workloads or
+.. image:: https://codecov.io/github/manishtomar/bloc/branch/master/graph/badge.svg
+   :target: https://codecov.io/github/manishtomar/bloc
+   :alt: Test Coverage
+
+Simple single-master group membership framework that helps in partitioning workloads or
 stateless data amoing multiple nodes.
 
 It reliably provides each node with following two pieces of information:
