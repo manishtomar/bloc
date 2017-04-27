@@ -4,6 +4,7 @@ Twisted application plugin for bloc
 
 from bloc.server import Bloc
 
+from twisted.application.service import MultiService
 from twisted.application.strports import service
 from twisted.python import usage
 from twisted.web.server import Site
@@ -25,10 +26,14 @@ def makeService(config):
     Set up the service.
     """
     from twisted.internet import reactor
-    site = Site(Bloc(reactor, float(config["timeout"]), float(config["settle"])).app.resource())
+    s = MultiService()
+    bloc = Bloc(reactor, float(config["timeout"]), float(config["settle"]))
+    s.addService(bloc)
+    site = Site(bloc.app.resource())
     site.displayTracebacks = False
 
     # The Twisted code currently (v16.6.0, 17.1.0) compares the type of
     # this argument to 'str' in order to determine how to handle it.
     description = str(config['listen'])
-    return service(description, site)
+    s.addService(service(description, site))
+    return s
