@@ -98,19 +98,3 @@ class BlocClient(Service):
         if not self._settled:
             return None
         return (self._index, self._total)
-
-
-def print_index(p): # noqa
-    print('index', p.get_index_total())
-
-
-def test(): # noqa
-    from twisted.internet import reactor
-    p = BlocClient(reactor, 'http://localhost:8989', 3)
-    p.startService()
-    task.LoopingCall(print_index, p).start(5)
-    reactor.run()
-
-
-if __name__ == '__main__':
-    test()
