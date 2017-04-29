@@ -9,8 +9,9 @@ bloc
    :target: https://codecov.io/github/manishtomar/bloc
    :alt: Test Coverage
 
-Simple single-master group membership framework that helps in partitioning workloads or
-stateless data amoing multiple nodes.
+Simple single-master group membership framework based on Twisted that helps in partitioning workloads or
+stateless data among multiple nodes. There is a standalone server provided as a twist plugin that
+needs to be run. Nodes 
 
 It reliably provides each node with following two pieces of information:
 
@@ -19,8 +20,8 @@ It reliably provides each node with following two pieces of information:
 
 This information alone is enough in almost all cases to equally distribute work. 
 
-The server at any time remains in either of the two states: SETTLING, SETTLED. It starts of in
-SETTLING and remains in that state when nodes start joining or leaving. When the nodes stop having
+The server at any time remains in either of the two states: SETTLING or SETTLED. It starts of in
+SETTLING and remains in that state when nodes start to join or leave. When the nodes stop having
 activity (no more joins / leaving) for configurable time, it then transitions to SETTLED state at
 which time it assigns each node an index and informs them about it.
 
@@ -29,3 +30,11 @@ and server ends that ensure that client is alive and hence occupies the position
 If server does not receive heartbeat within a given time, it removes the corresponding client and
 moves to SETTLING state and informs the nodes. Once it is settled it moves to SETTLING state. This
 way nodes can be added and removed on demand without any issues.
+
+Installation
+------------
+``pip install bloc`` on 
+
+Usage
+-----
+
