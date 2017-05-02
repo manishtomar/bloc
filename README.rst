@@ -26,7 +26,9 @@ On server run ``twist -t 4 -s 6`` where 4 is client heartbeat timeout and 6 is s
 This will start HTTP server on port 8989 by default. One can give different port via ``-l tcp:port`` option.
 
 On client to equally partition ``items`` among multiple nodes, create ``BlocClient`` and call ``get_index_total``
-on regular basis. Following is sample code:: 
+on regular basis. Following is sample code:
+
+.. code-block:: python
 
     from functools import partial
     from twisted.internet import task
@@ -34,6 +36,7 @@ on regular basis. Following is sample code::
 
     @inlineCallbacks
     def do_stuff(bc):
+        """ Process items based on index and total got from BlocClient """
         index_total = bc.get_index_total()
         if index_total is None:
             return
@@ -43,6 +46,7 @@ on regular basis. Following is sample code::
         yield gatherResults([process_item(item) for item in my_items])
 
     def is_my_item(index, total, item):
+        """ Can I process this item? """
         return hash(item) % total + 1 == index
 
     @task.react
@@ -56,14 +60,28 @@ on regular basis. Following is sample code::
 
 Here, the important function is ``is_my_item`` which decides whether the item can be processed by
 this node based on the index and total. It works based on item's hash. Needless to say it is important
-to have stable hash function implemented for your item. IMHO there is no necessity for item
+to have stable hash function implemented for your item. Ideally there shouldn't be any necessity for item
 to be anything other than some kind of key (string). This function will guarantee that only one node
 will process a particular item provided bloc server provides unique index to each node which it does.
+
+As an example, say node A and B are running above code talking to same bloc server and items is following
+list of userids being processed::
+
+    1. 365f54e9-5de8-4509-be16-38e0c37f5fe9
+    2. f6a6a396-d0bf-428a-b63b-830f98874b6c
+    3. 6bec3551-163d-4eb8-b2d8-1f2c4b106d33
+    4. b6691e16-1d95-42de-8ad6-7aa0c81fe080
+
+If node A's ``get_item_index`` returns ``(1, 2)`` then ``is_my_item`` will return ``True`` for userid 1 and 3
+and in node B's ``get_item_index`` returns ``(2, 2)`` and ``is_my_item`` will return ``True`` for userid 2 and 4.
+This way you can partition the user ids among multiple nodes.
+
+The choice of hash function and keyspace may decide how equally the workload is distributed across the nodes.
 
 The above code assumes that ``items`` is dynamic which will be true if it is based on your application
 data like users. However, there are situations where it can be a fixed number if your data is already
 parititioned among fixed number of buckets in which case you can use bloc to assign buckets to each node.
-An example of this is `otter's scheduling feature<https://github.com/rackerlabs/otter/blob/master/otter/scheduler.py>_`
+An example of this is `otter's scheduling feature<https://github.com/rackerlabs/otter/blob/master/otter/scheduler.py>`_
 which partitions events to be executed among fixed set of 10 buckets and distributes the buckets
 among < 10 nodes. Another example is kafka's partitioned topic. Each node can consume a particular
 partition based on index and total provided.
