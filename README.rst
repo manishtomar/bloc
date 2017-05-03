@@ -19,6 +19,8 @@ stateless data among multiple nodes. It consists of 2 components:
 It provides failure detection based on heartbeats. However, since it is single master the server is
 a single point of failure. But since the server is completely stateless it can be easily restarted without any issues.
 
+It works on Python 2.7 and 3.6
+
 Installation
 ------------
 ``pip install bloc`` on both server and client nodes. 
