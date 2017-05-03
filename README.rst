@@ -23,7 +23,7 @@ stateless data among multiple nodes. It consists of 2 components:
 It provides failure detection based on heartbeats. However, since it is single master the server is
 a single point of failure. But since the server is completely stateless it can be easily restarted without any issues.
 
-It works on Python 2.7 and 3.6
+It works on Python 2.7 and 3.6.
 
 Installation
 ------------
@@ -46,6 +46,7 @@ on regular basis. Following is sample code:
     @inlineCallbacks
     def do_stuff(bc):
         """ Process items based on index and total got from BlocClient """
+        # get_index_total returns this node's index and total number of nodes in the group
         index_total = bc.get_index_total()
         if index_total is None:
             return
@@ -114,6 +115,9 @@ The server at any time remains in either of the two states: SETTLING or SETTLED.
 SETTLING and remains in that state when nodes start to join or leave. When the nodes stop having
 activity (no more joins / leaving) for configurable time (called settling time given when starting server),
 it then transitions to SETTLED state at which time it assigns each node an index and informs them about it.
+The settling time is provided with ``-s`` option when starting the server and should generally be few seconds
+greater than heartbeat interval. This way the server avoids unnecessarily assigning indexes when
+multiple nodes are joining/leaving at close times.
 
 Client hearbeats to the server at interval provided when creating ``BlocClient``. The server keeps
 track of clients based on this heartbeat and removes any client that does not heartbeat in configured
