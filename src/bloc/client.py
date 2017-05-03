@@ -35,7 +35,7 @@ class BlocClient(Service):
 
         self._loop = task.LoopingCall(self._heartbeat)
         self._loop.clock = self.clock
-        if session_id is None:
+        if session_id is None:  # pragma: no cover
             self._session_id = str(uuid.uuid1())
         else:
             self._session_id = session_id
