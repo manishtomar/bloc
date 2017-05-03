@@ -9,15 +9,15 @@ def read(path):
 
 setup(
     name="bloc",
-    version='0.0.1',
-    description='Single-master group membership service',
+    version='0.1.0',
+    description='Single-master group membership framework',
     long_description=read("README.rst"),
     url="https://github.com/manishtomar/bloc",
 
     author='Manish Tomar',
-    author_email='manish.tomar@gmail.com',
+    author_email='manishtomar.public@gmail.com',
     maintainer='Manish Tomar',
-    maintainer_email='manish.tomar@gmail.com',
+    maintainer_email='manishtomar.public@gmail.com',
 
     license='MIT',
     keywords="group membership distributed systems",
