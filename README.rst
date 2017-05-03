@@ -1,6 +1,10 @@
 bloc
 ====
 
+.. image:: https://img.shields.io/pypi/v/bloc.svg
+   :target: https://pypi.org/project/bloc
+   :alt: PyPI package
+
 .. image:: https://travis-ci.org/manishtomar/bloc.svg?branch=master
    :target: https://travis-ci.org/manishtomar/bloc
    :alt: CI Status
