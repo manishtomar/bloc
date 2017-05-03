@@ -14,7 +14,7 @@ def print_index(b):
 
 
 def test(reactor):
-    b = BlocClient(reactor, 'http://localhost:8989', 3)
+    b = BlocClient(reactor, 'localhost:8989', 3)
     b.startService()
     return task.LoopingCall(print_index, b).start(5)
 
