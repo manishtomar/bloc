@@ -21,12 +21,12 @@ class BlocClientTests(SynchronousTestCase):
 
     def setUp(self):
         self.clock = Clock()
-        self.client = BlocClient(self.clock, 'http://url', 3, session_id='sid')
+        self.client = BlocClient(self.clock, 'server:8989', 3, session_id='sid')
 
     def setup_treq(self, code=200, body={}):
         self.async_failures = []
         self.stubs = RequestSequence(
-            [((b"get", "http://url/index", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
+            [((b"get", "http://server:8989/index", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
               (code, {}, json.dumps(body).encode("utf-8")))],
             self.async_failures.append)
         self.client.treq = StubTreq(StringStubbingResource(self.stubs))
@@ -119,7 +119,7 @@ class BlocClientTests(SynchronousTestCase):
         """
         self.test_settled()
         stubs = RequestSequence(
-            [((b"delete", "http://url/session", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
+            [((b"delete", "http://server:8989/session", {}, HasHeaders({"Bloc-Session-ID": ["sid"]}), b''),
               (200, {}, b''))],
             self.fail)
         self.client.treq = StubTreq(StringStubbingResource(stubs))

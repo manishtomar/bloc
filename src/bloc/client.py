@@ -16,17 +16,17 @@ class BlocClient(Service):
     Client to connect to bloc server
     """
 
-    def __init__(self, clock, url, interval, treq=treq, session_id=None):
+    def __init__(self, clock, server, interval, treq=treq, session_id=None):
         """
         Create a BlocClient instance
 
         :param clock: An implementation of :obj:`IReactorTime`. Typically will be main twisted
             reactor.
-        :param str url: URL of Bloc server being connected to
+        :param str server: server connection info in "server:port" form
         :param float interval: Frequency of heartbeat in seconds
         """
         self.clock = clock
-        self.url = url
+        self._server = server
 
         self._settled = False
         self._index = 0
@@ -59,7 +59,7 @@ class BlocClient(Service):
             self._settled = False
 
     def _url(self, segment):
-        return '{}/{}'.format(self.url.rstrip('/'), segment)
+        return 'http://{}/{}'.format(self._server, segment)
 
     def _get_index(self):
         d = self.treq.get(self._url("index"), headers={'Bloc-Session-ID': [self._session_id]})
