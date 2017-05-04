@@ -126,3 +126,13 @@ in server should be a little more than the heartbeat interval provided in client
 latency or temporary network glitches. In example above, server times out after 4 seconds and client
 heartbeats every 3 seconds. This hearbeat mechanism provides failure detection. If any of the nodes
 is bad that node will just stop processing work.
+
+Some things to know:
+--------------------
+
+* **No security**: Currently the server does not authenticate the client and accepts from any client.
+  The connection is also not encrypted. Depending on demand I am planning to add mutual TLS authentication
+* **No benchmarks done**. However, since its all in memory and Twisted it should easily scale to
+  few hundred clients. I'll do some testing and update later.
+* By default ``twist`` logging is at info level and due to heartbeats in HTTP every request is logged.
+  You can give ``--log-level=warn`` option to avoid it.

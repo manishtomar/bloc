@@ -9,7 +9,7 @@ def read(path):
 
 setup(
     name="bloc",
-    version='0.1.1',
+    version='0.1.2',
     description='Single-master group membership framework',
     long_description=read("README.rst"),
     url="https://github.com/manishtomar/bloc",
