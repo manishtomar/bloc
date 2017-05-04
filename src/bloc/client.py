@@ -91,8 +91,10 @@ class BlocClient(Service):
 
     def get_index_total(self):
         """
-        Return (index, total) tuple if settled, None if settling.
-        Note that this returns internal state last updated every "interval" seconds
+        Return (index, total) tuple if settled, None if settling. Here "index" is position of this
+        node in the group and "total" is number of nodes in the group. For example, if there are
+        two BlocClient instances talking to the server then one of them will get (1, 2) and other
+        will get (2, 2). Note that this returns internal state last updated every "interval"
         seconds.
         """
         if not self._settled:
