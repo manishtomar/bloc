@@ -31,7 +31,7 @@ Installation
 
 Usage
 -----
-On server run ``twist -t 4 -s 6`` where 4 is client heartbeat timeout and 6 is settling timeout (explained below).
+On server run ``twist bloc -t 4 -s 6`` where 4 is client heartbeat timeout and 6 is settling timeout (explained below).
 This will start HTTP server on port 8989 by default. One can give different port via ``-l tcp:port`` option.
 
 On client, to equally partition ``items`` among multiple nodes, create ``BlocClient`` and call ``get_index_total``
